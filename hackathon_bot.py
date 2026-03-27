@@ -1,24 +1,25 @@
 import requests
 from bs4 import BeautifulSoup
+import instaloader
+from datetime import datetime, timedelta
 import os
 
 # === 사용자 설정 ===
-# 로컬에서 테스트할 때는 아래 '여기에_복사한_웹훅_URL_입력' 부분에 1단계의 URL을 직접 넣어도 됩니다.
 DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL')
+KEYWORDS = ['오아시스', '호남', '정보보호', '해커톤']
+INSTAGRAM_ACCOUNTS = ['oasis_hackathon']
 
-def send_discord_message(events_text):
+def send_discord_message(message):
     """디스코드로 알림을 전송하는 함수"""
     if not DISCORD_WEBHOOK_URL:
         print("웹훅 URL이 설정되지 않았습니다.")
         return
 
-    # 디스코드로 보낼 메시지 구성
     data = {
-        "content": f"🚨 **관심 해커톤 발견!** 🚨\n\n{events_text}",
+        "content": message,
         "username": "해커톤 알리미"
     }
     
-    # 디스코드 웹훅으로 POST 요청 보내기
     response = requests.post(DISCORD_WEBHOOK_URL, json=data)
     if response.status_code == 204:
         print("디스코드 알림 전송 성공!")
@@ -28,7 +29,7 @@ def send_discord_message(events_text):
 def check_hackathons():
     """웹사이트 크롤링 및 키워드 확인"""
     urls = [
-        "https://www.wevity.com/?c=find&s=1&gbn=viewok&jnp=1&cidx=21",  # 여기에 크롤링할 URL들을 추가하세요
+        "https://www.wevity.com/?c=find&s=1&gbn=viewok&jnp=1&cidx=21",
         "",
     ]
     headers = {
@@ -59,9 +60,42 @@ def check_hackathons():
     
     if found_events:
         events_text = "\n\n".join(found_events)
-        send_discord_message(events_text)
+        send_discord_message(f"🚨 **관심 해커톤 발견!** 🚨\n\n{events_text}")
     else:
         print("새로운 관심 해커톤이 없습니다.")
 
+def check_instagram():
+    """인스타그램 계정의 최신 게시물 확인"""
+    L = instaloader.Instaloader()
+    yesterday = datetime.now() - timedelta(days=1)
+    
+    for account in INSTAGRAM_ACCOUNTS:
+        try:
+            profile = instaloader.Profile.from_username(L.context, account)
+            new_posts = []
+            
+            for post in profile.get_posts():
+                # 최근 1일 이내 게시물만 확인
+                if post.date_utc.replace(tzinfo=None) < yesterday:
+                    break
+                
+                caption = post.caption or "(캡션 없음)"
+                # 캡션이 너무 길면 200자로 자르기
+                if len(caption) > 200:
+                    caption = caption[:200] + "..."
+                
+                post_url = f"https://www.instagram.com/p/{post.shortcode}/"
+                new_posts.append(f"📸 **@{account}** 새 게시물\n💬 {caption}\n🔗 [게시물 보기]({post_url})")
+            
+            if new_posts:
+                posts_text = "\n\n".join(new_posts)
+                send_discord_message(f"📢 **인스타그램 새 소식!** 📢\n\n{posts_text}")
+            else:
+                print(f"@{account}: 최근 새 게시물 없음")
+                
+        except Exception as e:
+            print(f"인스타그램 확인 중 오류 ({account}): {e}")
+
 if __name__ == "__main__":
     check_hackathons()
+    check_instagram()
