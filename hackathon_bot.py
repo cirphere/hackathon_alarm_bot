@@ -1,7 +1,5 @@
 import requests
 from bs4 import BeautifulSoup
-import instaloader
-from datetime import datetime, timedelta
 import os
 import re
 import json
@@ -9,7 +7,7 @@ import json
 # === 사용자 설정 ===
 DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL')
 KEYWORDS = ['경진대회', '챌린지', '공모전', '모집', '개최', '오아시스', '호남', '정보보호', '해커톤', 'CTF']
-INSTAGRAM_ACCOUNTS = ['oasis_hackathon']
+
 SEEN_POSTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'seen_posts.json')
 
 # === 중복 감지 ===
@@ -48,43 +46,6 @@ def send_discord_message(message):
     else:
         print(f"전송 실패: {response.status_code}")
 
-
-def check_instagram():
-    """인스타그램 계정의 최신 게시물 확인"""
-    L = instaloader.Instaloader()
-    yesterday = datetime.now() - timedelta(days=1)
-    
-    for account in INSTAGRAM_ACCOUNTS:
-        try:
-            profile = instaloader.Profile.from_username(L.context, account)
-            new_posts = []
-            
-            for post in profile.get_posts():
-                # 최근 1일 이내 게시물만 확인
-                if post.date_utc.replace(tzinfo=None) < yesterday:
-                    break
-                
-                post_url = f"https://www.instagram.com/p/{post.shortcode}/"
-                
-                if post_url in seen_posts:
-                    continue
-                
-                caption = post.caption or "(캡션 없음)"
-                # 캡션이 너무 길면 200자로 자르기
-                if len(caption) > 200:
-                    caption = caption[:200] + "..."
-                
-                new_posts.append(f"📸 **@{account}** 새 게시물\n💬 {caption}\n🔗 [게시물 보기]({post_url})")
-                seen_posts.add(post_url)
-            
-            if new_posts:
-                posts_text = "\n\n".join(new_posts)
-                send_discord_message(f"📢 **인스타그램 새 소식!** 📢\n\n{posts_text}")
-            else:
-                print(f"@{account}: 최근 새 게시물 없음")
-                
-        except Exception as e:
-            print(f"인스타그램 확인 중 오류 ({account}): {e}")
 
 def check_sojoong():
     """전남대 SW중심대학 공지사항 크롤링"""
@@ -229,7 +190,7 @@ if __name__ == "__main__":
     check_sojoong()
     check_aicoss()
     check_cossnet()
-    check_instagram()
+
     
     # 확인한 게시물 목록 저장
     save_seen_posts(seen_posts)
