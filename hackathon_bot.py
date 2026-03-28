@@ -4,11 +4,32 @@ import instaloader
 from datetime import datetime, timedelta
 import os
 import re
+import json
 
 # === 사용자 설정 ===
 DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL')
 KEYWORDS = ['경진대회', '챌린지', '공모전', '모집', '개최', '오아시스', '호남', '정보보호', '해커톤', 'CTF']
 INSTAGRAM_ACCOUNTS = ['oasis_hackathon']
+SEEN_POSTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'seen_posts.json')
+
+# === 중복 감지 ===
+def load_seen_posts():
+    """이전에 알림 보낸 게시물 URL 목록 로드"""
+    if os.path.exists(SEEN_POSTS_FILE):
+        try:
+            with open(SEEN_POSTS_FILE, 'r', encoding='utf-8') as f:
+                return set(json.load(f))
+        except (json.JSONDecodeError, Exception):
+            return set()
+    return set()
+
+def save_seen_posts(seen_posts):
+    """알림 보낸 게시물 URL 목록 저장"""
+    with open(SEEN_POSTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(sorted(list(seen_posts)), f, ensure_ascii=False, indent=2)
+
+# 전역 변수로 관리
+seen_posts = load_seen_posts()
 
 def send_discord_message(message):
     """디스코드로 알림을 전송하는 함수"""
@@ -27,42 +48,6 @@ def send_discord_message(message):
     else:
         print(f"전송 실패: {response.status_code}")
 
-def check_hackathons():
-    """웹사이트 크롤링 및 키워드 확인"""
-    urls = [
-        "https://www.wevity.com/?c=find&s=1&gbn=viewok&jnp=1&cidx=21",
-    ]
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
-    
-    found_events = []
-    
-    for url in urls:
-        if not url:
-            continue
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            titles = soup.select('.tit a')
-            
-            for title in titles:
-                text = title.get_text().strip()
-                link = "https://www.wevity.com/" + title['href']
-                
-                if any(keyword in text for keyword in KEYWORDS):
-                    found_events.append(f"📌 **{text}**\n🔗 [자세히 보기]({link})")
-            
-        except Exception as e:
-            print(f"크롤링 중 오류 발생 ({url}): {e}")
-    
-    if found_events:
-        events_text = "\n\n".join(found_events)
-        send_discord_message(f"🚨 **관심 해커톤 발견!** 🚨\n\n{events_text}")
-    else:
-        print("[위비티] 새로운 관심 해커톤이 없습니다.")
 
 def check_instagram():
     """인스타그램 계정의 최신 게시물 확인"""
@@ -79,13 +64,18 @@ def check_instagram():
                 if post.date_utc.replace(tzinfo=None) < yesterday:
                     break
                 
+                post_url = f"https://www.instagram.com/p/{post.shortcode}/"
+                
+                if post_url in seen_posts:
+                    continue
+                
                 caption = post.caption or "(캡션 없음)"
                 # 캡션이 너무 길면 200자로 자르기
                 if len(caption) > 200:
                     caption = caption[:200] + "..."
                 
-                post_url = f"https://www.instagram.com/p/{post.shortcode}/"
                 new_posts.append(f"📸 **@{account}** 새 게시물\n💬 {caption}\n🔗 [게시물 보기]({post_url})")
+                seen_posts.add(post_url)
             
             if new_posts:
                 posts_text = "\n\n".join(new_posts)
@@ -128,8 +118,12 @@ def check_sojoong():
             else:
                 full_url = "https://sojoong.kr/notice/notice-board/" + href
             
+            if full_url in seen_posts:
+                continue
+            
             if any(keyword in text for keyword in KEYWORDS):
                 found_events.append(f"📌 **{text}**\n🔗 [자세히 보기]({full_url})")
+                seen_posts.add(full_url)
         
         if found_events:
             events_text = "\n\n".join(found_events)
@@ -174,11 +168,12 @@ def check_aicoss():
             post_id = match.group(1)
             full_url = f"https://aicoss.ac.kr/www/notice/view/{post_id}"
             
-            # 대학명/New 뱃지 등 제거하고 제목만 추출
-            # text에는 "전남대학교 New 실제제목 2026.03.26" 형태
-            # 제목 부분만 키워드 매칭
+            if full_url in seen_posts:
+                continue
+            
             if any(keyword in text for keyword in KEYWORDS):
                 found_events.append(f"📌 **{text}**\n🔗 [자세히 보기]({full_url})")
+                seen_posts.add(full_url)
         
         if found_events:
             events_text = "\n\n".join(found_events)
@@ -214,8 +209,12 @@ def check_cossnet():
             
             full_url = f"https://www.cossnet.com/contest/program/view?id={program_id}"
             
+            if full_url in seen_posts:
+                continue
+            
             if any(keyword in title for keyword in KEYWORDS):
                 found_events.append(f"📌 **{title}**\n🔗 [자세히 보기]({full_url})")
+                seen_posts.add(full_url)
         
         if found_events:
             events_text = "\n\n".join(found_events)
@@ -227,8 +226,11 @@ def check_cossnet():
         print(f"COSS 크롤링 중 오류 발생: {e}")
 
 if __name__ == "__main__":
-    check_hackathons()
     check_sojoong()
     check_aicoss()
     check_cossnet()
     check_instagram()
+    
+    # 확인한 게시물 목록 저장
+    save_seen_posts(seen_posts)
+    print(f"\n총 {len(seen_posts)}개의 게시물이 기록되었습니다.")
