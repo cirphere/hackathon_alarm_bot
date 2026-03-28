@@ -6,11 +6,9 @@
 
 | 소스 | 사이트 | 설명 |
 |------|--------|------|
-| Wevity | [wevity.com](https://www.wevity.com) | 공모전/대회 통합 플랫폼 |
 | 소중 | [sojoong.kr](https://sojoong.kr/notice/notice-board/) | 전남대 SW중심대학 공지사항 |
 | AICOSS | [aicoss.ac.kr](https://aicoss.ac.kr/www/notice/) | 전남대 인공지능혁신융합대학사업단 공지사항 |
 | COSS | [cossnet.com](https://www.cossnet.com/contest/program/list) | 첨단분야 혁신융합대학 경진대회 |
-| Instagram | [@oasis_hackathon](https://instagram.com/oasis_hackathon) | 오아시스 해커톤 인스타그램 |
 
 ## 🔑 키워드
 
@@ -50,7 +48,7 @@ python hackathon_bot.py
 alarm_bot/
 ├── hackathon_bot.py          # 메인 봇 스크립트
 ├── requirements.txt          # Python 의존성
-├── .env                      # 환경 변수 (로컬용)
+├── seen_posts.json           # 중복 알림 방지용 기록
 ├── .github/
 │   └── workflows/
 │       └── hackathon_alert.yml  # GitHub Actions 워크플로우
